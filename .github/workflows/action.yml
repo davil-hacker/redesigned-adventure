@@ -1,13 +1,14 @@
 name: Generate Sonyliv M3U from JSON
 
 on:
+  workflow_dispatch:  # This adds the "Run workflow" button
   schedule:
-    - cron: '*/10 * * * *' # Har 10 minute baad run karega
+    - cron: '*/10 * * * *' 
   push:
     branches:
       - main
     paths:
-      - 'sonyliv.json' # SonyLIV JSON file par trigger karega
+      - 'sonyliv.json'
 
 jobs:
   generate_playlist_from_json:
