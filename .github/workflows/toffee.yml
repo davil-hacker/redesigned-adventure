@@ -1,21 +1,21 @@
-name: Toffee Multi-Category Update
+name: Update Toffee Cookies Every 30 Min
 
 on:
   schedule:
-    - cron: "0 */3 * * *" # প্রতি ৩ ঘণ্টা পরপর
-  workflow_dispatch:
+    - cron: "*/30 * * * *"  # প্রতি ৩০ মিনিট পর পর
+  workflow_dispatch:        # ম্যানুয়ালি রান করার জন্য
 
 permissions:
   contents: write
 
 jobs:
-  update:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
@@ -23,21 +23,13 @@ jobs:
       - name: Install Dependencies
         run: pip install requests
 
-      - name: Run Master Scraper
+      - name: Run Cookie Updater
         run: python toffee_all.py
-
-      - name: Prevent Empty Push
-        run: |
-          # চেক করা হচ্ছে ফাইলটি আসলে আপডেট হয়েছে কি না
-          if [ ! -s toffee_all.m3u ] || [ "$(cat toffee_all.m3u)" = "#EXTM3U" ]; then
-            echo "Warning: Data not found (IP Blocked). Keeping existing file."
-            git checkout toffee_all.m3u
-          fi
 
       - name: Commit and Push
         run: |
-          git config --local user.email "bot@github.com"
-          git config --local user.name "ToffeeBot"
-          git add toffee_all.m3u
-          git commit -m "🔄 All Channels Updated: $(date)" || echo "No changes to commit"
+          git config --local user.email "actions@github.com"
+          git config --local user.name "CookieBot"
+          git add toffee.json toffee.m3u
+          git commit -m "🔄 Cookies Updated: $(date)" || echo "No changes"
           git push
