@@ -1,34 +1,27 @@
 name: Generate Sonyliv M3U from JSON
 
 on:
-  workflow_dispatch:  # This adds the "Run workflow" button
+  workflow_dispatch: # This adds the "Run workflow" button
   schedule:
-    - cron: '*/10 * * * *' 
+    - cron: '*/10 * * * *' # Runs every 10 minutes
   push:
     branches:
       - main
     paths:
-      - 'sonyliv.json'
+      - 'sonyliv.json' # Triggers when you upload/update this file
 
 jobs:
   generate_playlist_from_json:
     runs-on: ubuntu-latest
+    permissions: # Explicitly setting write permissions
+      contents: write
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0 # Fetches all history so push works better
 
-    - name: Remove existing playlist file
-      run: rm -f sonyliv-ww.m3u
-
-    - name: Configure Git
-      run: |
-        git config --global user.name "auto-update-bot"
-        git config --global user.email "auto-update-bot@users.noreply.github.com"
-        git remote set-url origin https://${{ secrets.GITHUB_TOKEN }}@github.com/davil-hacker/redesigned-adventure.git
-    
     - name: Ensure jq is installed
       run: sudo apt-get update && sudo apt-get install -y jq
 
@@ -48,9 +41,8 @@ jobs:
       run: |
         echo "#EXTM3U" > sonyliv-ww.m3u
 
-        # Modified jq query for SonyLIV JSON format
         jq -r '.matches[] |
-            select(.isLive == true) | # isLive field ka istemal
+            select(.isLive == true) |
             "#EXTINF:-1 tvg-id=\"" + 
             ((.contentId | tostring) // "unknown_id") + 
             "\" tvg-logo=\"" + 
@@ -61,9 +53,10 @@ jobs:
             " - " + (.audioLanguageName // "Unknown Language") + 
             "\n#EXTVLCOPT:http-referrer=https://allinonereborn.online/" +
             "\n" +
-            (.video_url // .dai_url // .pub_url // "http://invalid.stream.url") # Streaming URLs ka priority wise istemal
+            (.video_url // .dai_url // .pub_url // "http://invalid.stream.url")
             ' sonyliv.json >> sonyliv-ww.m3u
         
+        # Apply proxy transformations
         sed -i 's|\(https://sonydaimenew.akamaized.net/[^ ]*\)|https://mini.allinonereborn.fun/events/stream_proxy.php?url=\1|g' sonyliv-ww.m3u
         sed -i 's|\(https://sonymtmnew.akamaized.net/[^ ]*\)|https://mini.allinonereborn.fun/events/stream_proxy.php?url=\1|g' sonyliv-ww.m3u
         sed -i 's|\(https://liveakmt-m-lr.slivcdn.com/[^ ]*\)|https://mini.allinonereborn.fun/events/stream_proxy.php?url=\1|g' sonyliv-ww.m3u
@@ -74,14 +67,14 @@ jobs:
     - name: Commit and push generated M3U file
       if: steps.check_json_file.outputs.file_found == 'true'
       run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
         git add sonyliv-ww.m3u
         
         if git diff --cached --quiet; then
           echo "No changes to sonyliv-ww.m3u to commit."
         else
-          git fetch origin main
-          git reset --soft origin/main
-          git commit -m "Auto-generated: Sonyliv M3U playlist from JSON data"
+          git commit -m "Auto-generated: Sonyliv M3U playlist"
           git push origin main
         fi
       env:
