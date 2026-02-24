@@ -1,70 +1,64 @@
 import requests
-import re
+import json
 import os
 from datetime import datetime
 
-def fetch_toffee_all():
-    # Toffee-র মেইন ক্যাটাগরিগুলো
-    categories = ['sports', 'entertainment', 'news', 'cinema']
-    
+def get_toffee_cookies():
+    # Toffee-র API এন্ডপয়েন্ট যেখান থেকে ডাইনামিক ডাটা আসে
+    api_url = "https://toffeelive.com/en/live?_rsc=1dvpb"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         "Referer": "https://toffeelive.com/en/live",
-        "Rsc": "1" # Next.js ডাটা পাওয়ার জন্য জরুরি
+        "Rsc": "1"
     }
 
-    all_channels = []
-    seen_urls = set()
-
-    print("🚀 All channels fetch করা শুরু হচ্ছে...")
-
-    for cat in categories:
-        # RSC ইউআরএল (1dvpb কোডটি কাজ না করলে ব্রাউজার থেকে আপডেট করে নিন)
-        url = f"https://toffeelive.com/en/categories/{cat}?_rsc=1dvpb"
+    try:
+        response = requests.get(api_url, headers=headers, timeout=20)
+        raw_content = response.text
         
-        try:
-            print(f"📡 ক্যাটাগরি স্ক্যান হচ্ছে: {cat.upper()}")
-            response = requests.get(url, headers=headers, timeout=20)
-            content = response.text
+        # আপনার দেওয়া স্ট্রাকচার অনুযায়ী ডাটা প্রসেস করার ফাংশন
+        # এখানে আমরা ডাইনামিক কুকি এবং লিংকগুলো এক্সট্রাক্ট করব
+        import re
+        links = re.findall(r'https://[^\s"<>\\\]]+playlist\.m3u8', raw_content)
+        cookies = re.findall(r'Edge-Cache-Cookie=[^"\s\\\]]+', raw_content)
+        titles = re.findall(r'"title":"([^"]+)"', raw_content)
+        logos = re.findall(r'https://assets-prod\.services\.toffeelive\.com/[^\s"<>\\\]]+\.png', raw_content)
 
-            # Regex দিয়ে ডাটা খোঁজা
-            # ১. m3u8 স্ট্রিম লিংক
-            streams = re.findall(r'https://[^\s"<>\\\]]+playlist\.m3u8', content)
-            # ২. চ্যানেলের নাম
-            titles = re.findall(r'"title":"([^"]+)"', content)
-            # ৩. চ্যানেলের লোগো
-            logos = re.findall(r'https://images\.toffeelive\.com/[^\s"<>\\\]]+\.png', content)
+        updated_data = []
+        unique_links = set()
 
-            for i in range(len(streams)):
-                clean_url = streams[i].replace("\\u0026", "&")
-                if clean_url not in seen_urls:
-                    name = titles[i] if i < len(titles) else f"{cat.capitalize()} Ch {i+1}"
-                    logo = logos[i] if i < len(logos) else ""
-                    
-                    all_channels.append({
-                        "name": name,
-                        "url": clean_url,
-                        "logo": logo,
-                        "category": cat.capitalize()
-                    })
-                    seen_urls.add(clean_url)
+        for i in range(len(links)):
+            clean_link = links[i].replace("\\u0026", "&")
+            if clean_link not in unique_links:
+                channel_info = {
+                    "id": f"channel_{i}",
+                    "name": titles[i] if i < len(titles) else "Toffee Channel",
+                    "logo": logos[i] if i < len(logos) else "",
+                    "link": clean_link,
+                    "cookie": cookies[i] if i < len(cookies) else ""
+                }
+                updated_data.append(channel_info)
+                unique_links.add(clean_link)
 
-        except Exception as e:
-            print(f"❌ {cat} ক্যাটাগরিতে এরর: {e}")
+        # JSON ফাইল সেভ করা
+        with open("toffee.json", "w", encoding='utf-8') as f:
+            json.dump(updated_data, f, indent=2)
 
-    # M3U ফাইল তৈরি
-    if all_channels:
-        m3u_file = "toffee_all.m3u"
-        with open(m3u_file, "w", encoding='utf-8') as f:
+        # M3U ফাইল তৈরি (প্লেয়ারে দেখার জন্য)
+        with open("toffee.m3u", "w", encoding='utf-8') as f:
             f.write("#EXTM3U\n")
-            for ch in all_channels:
-                f.write(f'#EXTINF:-1 tvg-logo="{ch["logo"]}" group-title="{ch["category"]}", {ch["name"]}\n')
+            for ch in updated_data:
+                f.write(f'#EXTINF:-1 tvg-logo="{ch["logo"]}", {ch["name"]}\n')
                 f.write(f'#EXTVLCOPT:http-user-agent={headers["User-Agent"]}\n')
-                f.write(f'{ch["url"]}\n\n')
-        
-        print(f"✅ সফল! মোট {len(all_channels)}টি চ্যানেল পাওয়া গেছে।")
-    else:
-        print("❌ কোনো চ্যানেল পাওয়া যায়নি। হয়তো আইপি ব্লক করা হয়েছে।")
+                f.write(f'#EXTVLCOPT:http-referrer=https://toffeelive.com/\n')
+                f.write(f'#EXTVLCOPT:http-cookie={ch["cookie"]}\n')
+                f.write(f'{ch["link"]}\n\n')
+
+        print(f"✅ Cookies Updated at {datetime.now()}")
+        return True
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        return False
 
 if __name__ == "__main__":
-    fetch_toffee_all()
+    get_toffee_cookies()
