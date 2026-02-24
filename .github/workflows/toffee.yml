@@ -1,0 +1,43 @@
+name: Toffee Multi-Category Update
+
+on:
+  schedule:
+    - cron: "0 */3 * * *" # প্রতি ৩ ঘণ্টা পরপর
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: pip install requests
+
+      - name: Run Master Scraper
+        run: python toffee_all.py
+
+      - name: Prevent Empty Push
+        run: |
+          # চেক করা হচ্ছে ফাইলটি আসলে আপডেট হয়েছে কি না
+          if [ ! -s toffee_all.m3u ] || [ "$(cat toffee_all.m3u)" = "#EXTM3U" ]; then
+            echo "Warning: Data not found (IP Blocked). Keeping existing file."
+            git checkout toffee_all.m3u
+          fi
+
+      - name: Commit and Push
+        run: |
+          git config --local user.email "bot@github.com"
+          git config --local user.name "ToffeeBot"
+          git add toffee_all.m3u
+          git commit -m "🔄 All Channels Updated: $(date)" || echo "No changes to commit"
+          git push
